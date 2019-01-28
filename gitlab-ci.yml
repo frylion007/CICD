@@ -1,0 +1,160 @@
+stages:
+  - build
+  - review
+  - test
+  - staging
+  - production
+
+feature-build:
+  stage: build
+  script:
+    - echo "Build in $CI_COMMIT_REF_NAME"
+    - docker login -u devops-ci -p xxxxxxxxxxxx harbor.example.com
+    - docker build -t harbor.example.com/$CI_PROJECT_NAME/feature-build:CI_PIPELINE_ID
+  only:
+  - /feature-*/
+  tags:
+    - nginx
+    - review-apps
+    - deploy
+
+bugfix-build:
+  stage: build
+  script:
+   # "source branch must be bugfix-*, target branch must be release in merge request"
+    - echo "Build in $CI_COMMIT_REF_NAME"
+    - docker login -u devops-ci -p xxxxxxxxxxxx harbor.example.com
+    - docker build -t harbor.example.com/$CI_PROJECT_NAME/bugfix-build:CI_PIPELINE_ID
+  only:
+  - /bugfix-*/
+  tags:
+    - nginx
+    - review-apps
+    - deploy
+
+test-build:
+  stage: build
+  script:
+    # "source branch must be feature-*, target branch must be develop in merge request" 
+    - echo "Build in test"
+    - docker login -u devops-ci -p xxxxxxxxxxxx harbor.example.com
+    - docker build -t harbor.example.com/$CI_PROJECT_NAME/test:CI_PIPELINE_ID
+  only:
+  - /develop/
+  tags:
+    - nginx
+    - review-apps
+    - deploy
+
+staging-build:
+  stage: build
+  script:
+    # "source branch must be develop or bugfix-*, target branch must be release in merge request"
+    - echo "Build in staging"
+    - docker login -u devops-ci -p xxxxxxxxxxxx harbor.example.com
+    - docker build -t harbor.example.com/$CI_PROJECT_NAME/staging:CI_PIPELINE_ID
+    # "如果是bugfix-*合并到release分支，合并后项目负责人务必把release分支合并到develop分支和master分支"
+  only:
+  - /release/
+  tags:
+    - nginx
+    - review-apps
+    - deploy
+
+production-build:
+  stage: build
+  script:
+    # "source branch must be release, target branch must be master in merge request"
+    - echo "Build in production"
+    - docker login -u devops-ci -p xxxxxxxxxxxx harbor.example.com
+    - docker build -t harbor.example.com/$CI_PROJECT_NAME/production:CI_PIPELINE_ID
+  only:
+  - master
+  tags:
+    - nginx
+    - review-apps
+    - deploy
+
+review:
+  stage: review
+  script:
+    #if feature-build
+    - docker run -d -p 80:80 --name $CI_PROJECT_NAME-$CI_COMMIT_REF_NAME harbor.example.com/$CI_PROJECT_NAME/feature-build:CI_PIPELINE_ID
+    #elif bugfix-build
+    - docker run -d -p 80:80 --name $CI_PROJECT_NAME-$CI_COMMIT_REF_NAME harbor.example.com/$CI_PROJECT_NAME/bugfix-build:CI_PIPELINE_ID
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    url: http://$CI_COMMIT_REF_SLUG.$APPS_DOMAIN
+    on_stop: stop_review
+  only:
+    - /feature-*/
+    - /bugfix-*/
+  tags:
+    - nginx
+    - review-apps
+    - deploy
+
+stop_review:
+  stage: review
+  script:
+    - docker stop $CI_PROJECT_NAME-$CI_COMMIT_REF_NAME
+    - docker rm $CI_PROJECT_NAME-$CI_COMMIT_REF_NAME
+  variables:
+    GIT_STRATEGY: none
+  only:
+    - /feature-*/
+    - /bugfix-*/
+  when: manual
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    action: stop
+  tags:
+    - nginx
+    - review-apps
+    - deploy
+
+test:
+  stage: test
+  script:
+    - docker push harbor.example.com/$CI_PROJECT_NAME/test:CI_PIPELINE_ID
+    - deploy.sh
+  environment:
+    name: test
+    url: http://test.$APPS_DOMAIN
+  only:
+    - /develop/
+  tags:
+    - nginx
+    - review-apps
+    - deploy
+
+staging:
+  stage: staging
+  script:
+    - docker push -t harbor.example.com/$CI_PROJECT_NAME/staging:CI_PIPELINE_ID
+    - deploy.sh
+  environment:
+    name: staging
+    url: http://staging.$APPS_DOMAIN
+  only:
+    - /release/
+  tags:
+    - nginx
+    - review-apps
+    - deploy
+
+production:
+  stage: production
+  script:
+    - docker push -t harbor.example.com/$CI_PROJECT_NAME/production:CI_PIPELINE_ID
+    - deploy.sh
+  environment:
+    name: production
+    url: http://production.$APPS_DOMAIN
+  when: manual
+  only:
+    - master
+  tags:
+    - nginx
+    - review-apps
+    - deploy
