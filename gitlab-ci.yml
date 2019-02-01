@@ -1,7 +1,7 @@
 stages:
   - build
   - review
-  - test
+  - development
   - staging
   - production
 
@@ -32,13 +32,13 @@ bugfix-build:
     - review-apps
     - deploy
 
-test-build:
+development-build:
   stage: build
   script:
     # "source branch must be feature-*, target branch must be develop in merge request" 
-    - echo "Build in test"
+    - echo "Build in development"
     - docker login -u devops-ci -p xxxxxxxxxxxx harbor.example.com
-    - docker build -t harbor.example.com/$CI_PROJECT_NAME/test:CI_PIPELINE_ID
+    - docker build -t harbor.example.com/$CI_PROJECT_NAME/development:CI_PIPELINE_ID
   only:
   - /develop/
   tags:
@@ -113,14 +113,14 @@ stop_review:
     - review-apps
     - deploy
 
-test:
-  stage: test
+deploy_development:
+  stage: development
   script:
-    - docker push harbor.example.com/$CI_PROJECT_NAME/test:CI_PIPELINE_ID
+    - docker push harbor.example.com/$CI_PROJECT_NAME/development:CI_PIPELINE_ID
     - deploy.sh
   environment:
-    name: test
-    url: http://test.$APPS_DOMAIN
+    name: development
+    url: http://development.$APPS_DOMAIN
   only:
     - /develop/
   tags:
@@ -128,7 +128,7 @@ test:
     - review-apps
     - deploy
 
-staging:
+deploy_staging:
   stage: staging
   script:
     - docker push -t harbor.example.com/$CI_PROJECT_NAME/staging:CI_PIPELINE_ID
@@ -143,7 +143,7 @@ staging:
     - review-apps
     - deploy
 
-production:
+deploy_production:
   stage: production
   script:
     - docker push -t harbor.example.com/$CI_PROJECT_NAME/production:CI_PIPELINE_ID
